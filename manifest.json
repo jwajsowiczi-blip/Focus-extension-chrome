@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Focus",
+  "version": "0.1",
+  "description": "Blocks distracting sites to help you focus.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["tabs", "storage", "declarativeNetRequest"],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
+}

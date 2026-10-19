@@ -1,0 +1,4 @@
+li { display: flex; justify-content: space-between; align-items: center; }
+.remove-button { border: none; background: none; cursor: pointer; }
+
+body { width: 250px; font-family: sans-serif; }
