@@ -1,7 +1,8 @@
 
+chrome.storage.local.set({enabled: true}); // set the default value of enabled to true
+
 // grab the rules from the declarativeNetRequest API
 document.addEventListener("DOMContentLoaded", async () => {
-    chrome.storage.local.set({enabled: true}); // set the default value of enabled to true
     let rules = await chrome.storage.local.get("blockedSites");
     rules = rules.blockedSites || [];
     // show blocked urls:
@@ -14,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // check if it is valid url and if it is already blocked, if not add it to the list of blocked urls
         await addUrlToStorage(blockedSiteInput);
+        console.log("in rules: ", await chrome.declarativeNetRequest.getDynamicRules());
         console.log("in storage: ", await chrome.storage.local.get("blockedSites"));
     });
 
@@ -26,12 +28,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             let { blockedSites = [] } = await chrome.storage.local.get("blockedSites");
             for (const site of blockedSites) {
                 await addRule(site);
+                console.log("Added rule for:", site);
             }
         }
         else {
             let { blockedSites = [] } = await chrome.storage.local.get("blockedSites");
             for (const site of blockedSites) {
                 await removeRule(site);
+                console.log("Removed rule for:", site);
             }
         }
     });
@@ -91,6 +95,7 @@ async function addRule(url) {
                     }
                 ]
             });
+    console.log("Added rule for:", url);
 }
 
 // remove a rule from the declarativeNetRequest API
@@ -121,7 +126,7 @@ async function addUrlToStorage(blockedSiteInput) {
         listBlockedSites(blockedSites);
     }
 
-    if (await chrome.storage.local.get("enabled")) {
+    if ((await chrome.storage.local.get("enabled")).enabled) {
         await addRule(getDomain(blockedSiteInput));
     }
 }
@@ -131,7 +136,8 @@ async function removeUrlFromStorage(url) {
     let { blockedSites = [] } = await chrome.storage.local.get("blockedSites");
     blockedSites = blockedSites.filter(site => site !== url);
     await chrome.storage.local.set({blockedSites: blockedSites});
-    if (await chrome.storage.local.get("enabled")) {
+    if ((await chrome.storage.local.get("enabled")).enabled) {
+        console.log("Removing rule for:", url);
         await removeRule(url);
     }
     listBlockedSites(blockedSites);
