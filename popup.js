@@ -3,20 +3,19 @@ chrome.storage.local.set({enabled: true}); // set the default value of enabled t
 
 // grab the rules from the declarativeNetRequest API
 document.addEventListener("DOMContentLoaded", async () => {
-    let rules = await chrome.storage.local.get("blockedSites");
-    rules = rules.blockedSites || [];
     // show blocked urls:
-    listBlockedSites(rules);
+    listBlockedSites();
 
     // add a new blocked url
     document.getElementById("add-blocked-site-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         const blockedSiteInput = document.getElementById("blocked-site-input").value;
-
+        const group = document.getElementById("group").value;
         // check if it is valid url and if it is already blocked, if not add it to the list of blocked urls
-        await addUrlToStorage(blockedSiteInput);
+        await addUrlToStorage(blockedSiteInput, group);
         console.log("in rules: ", await chrome.declarativeNetRequest.getDynamicRules());
-        console.log("in storage: ", await chrome.storage.local.get("blockedSites"));
+        console.log("in storage: ", await chrome.storage.local.get());
+        listBlockedSites()
     });
 
     // toggle the blocking on/off
@@ -38,6 +37,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 console.log("Removed rule for:", site);
             }
         }
+        listBlockedSites()
     });
 
     // remove a blocked url
@@ -49,9 +49,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         else {
             return;
         }
-        let rules = await chrome.storage.local.get("blockedSites");
-        rules = rules.blockedSites || [];
-        listBlockedSites(rules);
+        listBlockedSites();
     });
 });
 
@@ -66,16 +64,28 @@ function getDomain(url) {
     return new URL(url).hostname;
 }
 // shows blocked urls in the popup
-function listBlockedSites(rules) {
+async function listBlockedSites() {
+    const { groups = {} } = await chrome.storage.local.get("groups");
     document.getElementById("blocked-sites-list").innerHTML = ""; // clear the list
-    for (let i = 0; i < rules.length; i++) {
-        const listItem = document.createElement("li");
-        const removeButton = document.createElement("button");
-        removeButton.textContent = "X";
-        removeButton.classList.add("remove-button");
-        listItem.textContent = rules[i];
-        listItem.appendChild(removeButton);
-        document.getElementById("blocked-sites-list").appendChild(listItem);
+    for (const group of Object.keys(groups)) {
+        if (groups[group]["site"] === undefined || groups[group]["site"].length === 0) {
+            continue; // skip empty groups
+        }
+        const header = document.createElement("h3");
+        header.textContent = group
+        document.getElementById("blocked-sites-list").appendChild(header);
+        for (const site of groups[group]["site"]) {
+            const listItem = document.createElement("li");
+            const removeButton = document.createElement("button");
+            removeButton.textContent = "X";
+            removeButton.classList.add("remove-button");
+            listItem.textContent = site;
+            listItem.appendChild(removeButton);
+            list = document.createElement("ul");
+            list.id = group;
+            list.appendChild(listItem);
+            document.getElementById("blocked-sites-list").appendChild(list);
+        }
     }
 }
 
@@ -110,20 +120,27 @@ async function removeRule(url) {
 }
 
 // check if it is valid url and if it is already blocked, if not add it to the list of blocked urls
-async function addUrlToStorage(blockedSiteInput) {
+async function addUrlToStorage(blockedSiteInput, group) {
     if (!getDomain(blockedSiteInput)) {
         alert("Please enter a valid URL.");
         return;
     }
     else {
-        let { blockedSites = [] } = await chrome.storage.local.get("blockedSites");
-        if (blockedSites.includes(getDomain(blockedSiteInput))) {
-            alert("This site is already added.");
-            return;
+        let { groups = {} } = await chrome.storage.local.get("groups");
+        for (const group of Object.keys(groups)) {
+           for (const site of groups[group]["site"] || []) {
+                if (site === getDomain(blockedSiteInput)) {
+                    alert("This site is already added.");
+                    return;
+                }
+            }
         }
-        blockedSites.push(getDomain(blockedSiteInput));
-        await chrome.storage.local.set({blockedSites: blockedSites});;
-        listBlockedSites(blockedSites);
+        groups[group] = groups[group] || {};
+        groups[group]["site"] = groups[group]["site"] || [];
+        groups[group]["site"].push(getDomain(blockedSiteInput));
+        groups[group]["enabled"] = groups[group]["enabled"] || true;
+        await chrome.storage.local.set({groups: groups});
+        console.log("in storage group ", group, ": ", await chrome.storage.local.get(group));
     }
 
     if ((await chrome.storage.local.get("enabled")).enabled) {
@@ -133,12 +150,14 @@ async function addUrlToStorage(blockedSiteInput) {
 
 // remove a url from storage and remove the corresponding rule from the declarativeNetRequest API
 async function removeUrlFromStorage(url) {
-    let { blockedSites = [] } = await chrome.storage.local.get("blockedSites");
-    blockedSites = blockedSites.filter(site => site !== url);
-    await chrome.storage.local.set({blockedSites: blockedSites});
+    let { groups = {} } = await chrome.storage.local.get("groups");
+    for (const group of Object.keys(groups)) {
+        groups[group]["site"] = groups[group]["site"]?.filter(site => site !== url) || [];
+        await chrome.storage.local.set({groups: groups});
+        console.log("in storage ", await chrome.storage.local.get(groups));
+    }
     if ((await chrome.storage.local.get("enabled")).enabled) {
         console.log("Removing rule for:", url);
         await removeRule(url);
     }
-    listBlockedSites(blockedSites);
 }

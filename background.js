@@ -1,5 +1,5 @@
 // keeps track of the current active tab and window
-
+/*
 console.log("background started");
 
 // returns domain name of a website.
