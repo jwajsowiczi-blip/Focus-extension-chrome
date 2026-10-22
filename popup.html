@@ -5,9 +5,14 @@
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
-    <h1>blocked sites</h1>
+    <h1>Task list</h1>
     <hr>
-    <div id="blocked-sites-list"></div>
+    <ul id="task-list"></ul>
+    <form id="task-form">
+      <input type="text" id="task-input" placeholder="Enter a task">
+      <button type="submit">Add</button>
+    </form>
+    <button id="start-blocking">Start Blocking</button>
     <script type="module" src="popup.js"></script>
   </body>
 </html>

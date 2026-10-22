@@ -1,6 +1,4 @@
 
-chrome.storage.local.set({enabled: true}); // set the default value of enabled to true
-
 // grab the rules from the declarativeNetRequest API
 document.addEventListener("DOMContentLoaded", async () => {
     // show blocked urls:
@@ -27,7 +25,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             alert("This group already exists.");
             return;
         }
-        groups[groupNameInput] = { site: [] };
+        groups[groupNameInput] = { site: [], enabled: false };
         await chrome.storage.local.set({groups: groups});
         await showOptionsPage();
     });
@@ -42,8 +40,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
         for (const site of groups[groupNameInput]["site"] || []) {
-            await removeRule(site);
-            console.log("Removed rule for:", site);
+            let rules = await chrome.declarativeNetRequest.getDynamicRules();
+            rules = rules.map(rule => rule.condition.urlFilter);
+            if (rules.includes(`||${site}`)){
+                await removeRule(site);
+                console.log("Removed rule for:", site);
+            }
         }
         delete groups[groupNameInput];
         await chrome.storage.local.set({groups: groups});
@@ -60,6 +62,31 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
         await showOptionsPage();
+    });
+
+    // add event listener to the on/off buttons
+    document.getElementById("blocked-sites-list").addEventListener("click", async (event) => {
+        if (event.target.classList.contains("on/off")) {
+            const group = event.target.id;
+            // Handle on/off button click
+            const { groups = {} } = await chrome.storage.local.get("groups");
+            groups[group]["enabled"] = !groups[group]["enabled"];
+            chrome.storage.local.set({groups})
+
+            // update rules depending on the new state of the group
+            if (groups[group]["enabled"]) {
+                event.target.textContent = "on";
+                for (const site of groups[group]["site"]) {
+                    await addRule(site);
+                }
+            } else {
+                event.target.textContent = "off";
+                for (const site of groups[group]["site"]) {
+                    await removeRule(site);
+                }
+            }
+                
+        }
     });
 });
 
@@ -104,7 +131,16 @@ async function showOptionsPage() {
             list.appendChild(listItem);
             document.getElementById("blocked-sites-list").appendChild(list);
         }
-    }
+        let button = document.createElement("button");
+        button.classList.add("on/off")
+        if (groups[group]["enabled"]) {
+            button.textContent = "on";
+        } else {
+            button.textContent = "off";
+        }
+        button.id = group;
+        document.getElementById("blocked-sites-list").appendChild(button);
+        }
 }
 
 // add a rule to the declarativeNetRequest API
@@ -156,7 +192,7 @@ async function addUrlToStorage(blockedSiteInput, group) {
         groups[group] = groups[group] || {};
         groups[group]["site"] = groups[group]["site"] || [];
         groups[group]["site"].push(getDomain(blockedSiteInput));
-        groups[group]["enabled"] = groups[group]["enabled"] || true;
+        groups[group]["enabled"] = groups[group]["enabled"] || false;
         await chrome.storage.local.set({groups: groups});
         console.log("in storage group ", group, ": ", await chrome.storage.local.get(group));
     }
