@@ -1,2 +1,2 @@
 # Focus-extension-chrome
-it's a chrome extension that allows you to block sites for a certain amount of time or until you finish a task
+it's a chrome extension that allows you to block sites or block them until you finish a task
