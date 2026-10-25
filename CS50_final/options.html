@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <h1>blocked sites</h1>
+    <hr>
+    <div id="blocked-sites-list"></div>
+    <form action="#" id="add-blocked-site-form">
+      <input type="text" autocomplete="off" autofocus id="blocked-site-input" placeholder="Enter a site to block">
+      <select id="group">
+      </select>
+      <button type="submit">Add</button>
+    </form>
+    <form action="#" id="add-group-form">
+      <input type="text" id="group-name-input" placeholder="Enter a group name">
+      <button type="submit">Add Group</button>
+    </form>
+    <form action="#" id="delete-group-form">
+      <select id="group-name-input-delete" placeholder="Enter a group name">
+      </select>
+      <button type="submit">Delete Group</button>
+    </form>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
