@@ -1,93 +1,130 @@
-// import the functions from options.js
-import {getDomain, addRule, removeRule} from "./options.js";
+// popup.js
+// Popup: a to-do list and a "Start Blocking" button for strict mode.
+// Strict mode blocks the sites of all groups, and only ends when every task is done.
+//
+// AI assistance (CS50 citation): this file was cleaned up (indentation, comments)
+// and bug-fixed with help from Claude (Anthropic). Fixes are marked with "AI-assisted".
 
-// global variables
-let strictMode = false;
+// AI-assisted: import from utils.js instead of options.js, because importing
+// options.js also ran the options page's code inside the popup
+import { addRule, removeRule, isStrictMode } from "./utils.js";
+
 
 document.addEventListener("DOMContentLoaded", async () => {
     await showTasks();
-    // add tasks
+    await showStrictStatus();
+
+    // add a task
     document.getElementById("task-form").addEventListener("submit", async (event) => {
         event.preventDefault();
-        const taskInput = document.getElementById("task-input").value;
-        if (taskInput.trim() === "") {
+        const taskInput = document.getElementById("task-input").value.trim();
+        if (taskInput === "") {
             alert("Please enter a task.");
             return;
         }
-        let { tasks = [] } = await chrome.storage.local.get("tasks");
+        const { tasks = [] } = await chrome.storage.local.get("tasks");
         tasks.push(taskInput);
-        await chrome.storage.local.set({tasks: tasks});
+        await chrome.storage.local.set({ tasks });
         document.getElementById("task-input").value = "";
         await showTasks();
     });
 
-    //remove tasks
+    // remove a task (= the task is done)
     document.getElementById("task-list").addEventListener("click", async (event) => {
-        if (event.target.tagName === "BUTTON") {
-            const task = event.target.closest("li").textContent.replace("X", "").trim();
-            let { tasks = [] } = await chrome.storage.local.get("tasks");
-            tasks = tasks.filter(t => t !== task);
-            await chrome.storage.local.set({tasks: tasks});
-            await showTasks();
-        }
-        // check if all tasks are completed. then can the user unblock.
-        let { tasks = [] } = await chrome.storage.local.get("tasks");
-        if (tasks.length === 0) {
-             let rules = await chrome.declarativeNetRequest.getDynamicRules();
-            strictMode = false;
-            console.log("strictmode: ", strictMode)
-            rules = rules.map(rule => rule.condition.urlFilter);
-            let { groups = {} } = await chrome.storage.local.get("groups");
-            for (const group of Object.keys(groups)) {
-                for (const site of groups[group]["site"]) {
-                    if (rules.includes(`||${site}`)) {
-                        if (!groups[group]["enabled"]) {
-                            await removeRule(site);
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    // start blocking
-    document.getElementById("start-blocking").addEventListener("click", async () => {
-        const {groups = {}} = await chrome.storage.local.get("groups");
-        let rules = await chrome.declarativeNetRequest.getDynamicRules();
-        if (document.getElementById("task-list").textContent === "you have no tasks left") {
-            alert("you have no tasks")
+        const button = event.target.closest(".remove-button");
+        if (!button) {
             return;
         }
-        strictMode = true;
-        console.log("strictmode: ", strictMode)
-        rules = rules.map(rule => rule.condition.urlFilter);
-        for (const group of Object.keys(groups)) {
-            for (const site of groups[group]["site"]) {
-                if (!rules.includes(`||${site}`)) {
-                    await addRule(site);
-                }
-            }
+
+        // AI-assisted: remove the task by its position, stored on the button.
+        // Before, the "X" was removed from the <li> text, which broke tasks that
+        // contain a capital X (they could never be removed, so strict mode never ended).
+        const { tasks = [] } = await chrome.storage.local.get("tasks");
+        tasks.splice(Number(button.dataset.index), 1);
+        await chrome.storage.local.set({ tasks });
+        await showTasks();
+
+        // when all tasks are done, strict mode is over
+        if (tasks.length === 0 && await isStrictMode()) {
+            await endStrictMode();
         }
     });
 
-    // strict block is over when finishing all tasks
+    // start strict mode: block the sites of all groups
+    document.getElementById("start-blocking").addEventListener("click", async () => {
+        // AI-assisted: check the tasks in storage instead of the text in the list
+        const { tasks = [] } = await chrome.storage.local.get("tasks");
+        if (tasks.length === 0) {
+            alert("You have no tasks.");
+            return;
+        }
+
+        // AI-assisted: strict mode is saved in storage, so the options page can see it
+        // and it stays on after the popup closes
+        await chrome.storage.local.set({ strictMode: true });
+
+        const { groups = {} } = await chrome.storage.local.get("groups");
+        for (const group of Object.keys(groups)) {
+            for (const site of groups[group].site || []) {
+                await addRule(site); // addRule skips sites that already have a rule
+            }
+        }
+        await showStrictStatus();
+    });
 });
 
+
+// end strict mode: unblock the sites of groups that are switched off.
+// Sites of groups that are switched on stay blocked.
+async function endStrictMode() {
+    await chrome.storage.local.set({ strictMode: false });
+
+    const { groups = {} } = await chrome.storage.local.get("groups");
+    for (const group of Object.keys(groups)) {
+        if (!groups[group].enabled) {
+            for (const site of groups[group].site || []) {
+                await removeRule(site);
+            }
+        }
+    }
+    await showStrictStatus();
+}
+
+
+// shows the tasks with an X button next to each one
 async function showTasks() {
     const { tasks = [] } = await chrome.storage.local.get("tasks");
     const taskList = document.getElementById("task-list");
     taskList.innerHTML = "";
+
     if (tasks.length === 0) {
         const listItem = document.createElement("li");
         listItem.textContent = "you have no tasks left";
         taskList.appendChild(listItem);
     }
-    for (const task of tasks) {
+
+    for (let i = 0; i < tasks.length; i++) {
         const listItem = document.createElement("li");
-        listItem.textContent = task;
+        listItem.textContent = tasks[i];
+
         const removeButton = document.createElement("button");
         removeButton.textContent = "X";
+        removeButton.classList.add("remove-button");
+        removeButton.dataset.index = i; // AI-assisted: remember which task this button removes
+
         listItem.appendChild(removeButton);
         taskList.appendChild(listItem);
+    }
+}
+
+
+// AI-assisted: show whether strict mode is on, so the user can see it after reopening the popup
+async function showStrictStatus() {
+    const status = document.getElementById("strict-status");
+    if (await isStrictMode()) {
+        status.textContent = "Strict mode is on. Finish your tasks to unblock.";
+    }
+    else {
+        status.textContent = "";
     }
 }
